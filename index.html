@@ -1,0 +1,248 @@
+<!DOCTYPE html>  
+<html lang="zh-TW">  
+<head>  
+    <meta charset="UTF-8">  
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">  
+    <title>航班時間換算工具 (UTC / Local)</title>  
+    <style>  
+        body {  
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;  
+            background-color: #f4f7f6;  
+            margin: 0;  
+            padding: 15px;  
+            color: #333;  
+        }  
+        h2 {  
+            text-align: center;  
+            color: #008000; /* 長榮綠 */  
+            font-size: 20px;  
+        }  
+        .container {  
+            max-width: 600px;  
+            margin: 0 auto;  
+            background: #fff;  
+            border-radius: 12px;  
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);  
+            padding: 20px;  
+        }  
+        .row {  
+            display: flex;  
+            flex-direction: column;  
+            margin-bottom: 15px;  
+            padding-bottom: 15px;  
+            border-bottom: 1px solid #eee;  
+        }  
+        .row:last-child {  
+            border-bottom: none;  
+            margin-bottom: 0;  
+            padding-bottom: 0;  
+        }  
+        label {  
+            font-weight: bold;  
+            margin-bottom: 5px;  
+            font-size: 14px;  
+        }  
+        select, input[type="text"] {  
+            width: 100%;  
+            padding: 10px;  
+            font-size: 16px;  
+            border: 1px solid #ccc;  
+            border-radius: 8px;  
+            box-sizing: border-box;  
+            background-color: #fafafa;  
+        }  
+        input[type="text"] {  
+            margin-top: 5px;  
+            font-weight: bold;  
+            color: #0056b3;  
+        }  
+        /* 讓 UTC 欄位看起來特別一點 */  
+        .utc-row {  
+            background-color: #eef5e9;  
+            padding: 15px;  
+            border-radius: 8px;  
+            border-bottom: none;  
+        }  
+    </style>  
+</head>  
+<body>  
+  
+<div class="container">  
+    <h2>✈️ 航班時間換算工具</h2>  
+    <p style="font-size:12px; text-align:center; color:#666;">請在任一欄位輸入時間(格式: HHMM, 例如 0800)，其他欄位將自動換算。</p>  
+  
+    <!-- UTC 欄位 -->  
+    <div class="row utc-row">  
+        <label>🌐 UTC 世界協調時間</label>  
+        <input type="text" id="utc-time" placeholder="例如: 0000" oninput="calculateFromUTC(this.value)" maxlength="4">  
+    </div>  
+  
+    <!-- 場站 1 -->  
+    <div class="row">  
+        <label>  
+            📍 場站 1  
+            <select id="station1" onchange="recalculateAll()">  
+                <!-- Javascript 將自動填入長榮場站 -->  
+            </select>  
+        </label>  
+        <input type="text" id="time1" placeholder="Local Time" oninput="calculateFromLocal(this.value, 'station1')" maxlength="4">  
+    </div>  
+  
+    <!-- 場站 2 -->  
+    <div class="row">  
+        <label>  
+            📍 場站 2  
+            <select id="station2" onchange="recalculateAll()">  
+            </select>  
+        </label>  
+        <input type="text" id="time2" placeholder="Local Time" oninput="calculateFromLocal(this.value, 'station2')" maxlength="4">  
+    </div>  
+  
+    <!-- 場站 3 -->  
+    <div class="row">  
+        <label>  
+            📍 場站 3  
+            <select id="station3" onchange="recalculateAll()">  
+            </select>  
+        </label>  
+        <input type="text" id="time3" placeholder="Local Time" oninput="calculateFromLocal(this.value, 'station3')" maxlength="4">  
+    </div>  
+  
+    <!-- 場站 4 -->  
+    <div class="row">  
+        <label>  
+            📍 場站 4  
+            <select id="station4" onchange="recalculateAll()">  
+            </select>  
+        </label>  
+        <input type="text" id="time4" placeholder="Local Time" oninput="calculateFromLocal(this.value, 'station4')" maxlength="4">  
+    </div>  
+</div>  
+  
+<script>  
+    // 定義長榮航空(含貨機)場站與對應時區  
+    const stations = [  
+        { code: 'TPE/TSA (台北/松山)', tz: 'Asia/Taipei' },  
+        { code: 'BKK/CNX (曼谷/清邁)', tz: 'Asia/Bangkok' },  
+        { code: 'LHR (倫敦)', tz: 'Europe/London' },  
+        { code: 'MUC (慕尼黑)', tz: 'Europe/Berlin' },  
+        { code: 'CDG (巴黎)', tz: 'Europe/Paris' },  
+        { code: 'AMS (阿姆斯特丹)', tz: 'Europe/Amsterdam' },  
+        { code: 'VIE (維也納)', tz: 'Europe/Vienna' },  
+        { code: 'MXP (米蘭)', tz: 'Europe/Rome' },  
+        { code: 'LAX/SFO/SEA/YVR (美西/溫哥華)', tz: 'America/Los_Angeles' },  
+        { code: 'JFK/EWR/YYZ (紐約/多倫多)', tz: 'America/New_York' },  
+        { code: 'ORD/DFW (芝加哥/達拉斯)', tz: 'America/Chicago' },  
+        { code: 'IAH (休士頓)', tz: 'America/Chicago' },  
+        { code: 'ATL (亞特蘭大-貨機)', tz: 'America/New_York' },  
+        { code: 'ANC (安克拉治-貨機)', tz: 'America/Anchorage' },  
+        { code: 'NRT/HND/KIX/FUK (日本)', tz: 'Asia/Tokyo' },  
+        { code: 'ICN/GMP (首爾)', tz: 'Asia/Seoul' },  
+        { code: 'HKG/MFM (港澳)', tz: 'Asia/Hong_Kong' },  
+        { code: 'PVG/PEK/CAN (中國大陸)', tz: 'Asia/Shanghai' },  
+        { code: 'MNL (馬尼拉)', tz: 'Asia/Manila' },  
+        { code: 'SGN/HAN (胡志明/河內)', tz: 'Asia/Ho_Chi_Minh' },  
+        { code: 'SIN (新加坡)', tz: 'Asia/Singapore' },  
+        { code: 'KUL (吉隆坡)', tz: 'Asia/Kuala_Lumpur' },  
+        { code: 'CGK (雅加達)', tz: 'Asia/Jakarta' },  
+        { code: 'BNE (布里斯本)', tz: 'Australia/Brisbane' },  
+        { code: 'DEL (德里-貨機)', tz: 'Asia/Kolkata' }  
+    ];  
+  
+    // 初始化選單  
+    function initDropdowns() {  
+        const selects = ['station1', 'station2', 'station3', 'station4'];  
+        selects.forEach((id, index) => {  
+            const select = document.getElementById(id);  
+            stations.forEach(station => {  
+                const option = document.createElement('option');  
+                option.value = station.tz;  
+                option.text = station.code;  
+                select.appendChild(option);  
+            });  
+            // 預設選擇不同場站做展示  
+            if(index === 0) select.selectedIndex = 0; // TPE  
+            if(index === 1) select.selectedIndex = 14; // 日本  
+            if(index === 2) select.selectedIndex = 2; // LHR  
+            if(index === 3) select.selectedIndex = 3; // MUC  
+        });  
+    }  
+  
+    // 將 HHMM 字串轉換為數值分鐘  
+    function parseTime(hhmm) {  
+        if (!/^\d{4}$/.test(hhmm)) return null;  
+        const h = parseInt(hhmm.substring(0, 2), 10);  
+        const m = parseInt(hhmm.substring(2, 4), 10);  
+        if (h > 23 || m > 59) return null;  
+        return h * 60 + m;  
+    }  
+  
+    // 將分鐘格式化回 HHMM  
+    function formatTime(minutes) {  
+        // 處理跨日問題  
+        minutes = ((minutes % 1440) + 1440) % 1440;  
+        const h = Math.floor(minutes / 60).toString().padStart(2, '0');  
+        const m = (minutes % 60).toString().padStart(2, '0');  
+        return `${h}${m}`;  
+    }  
+  
+    // 取得指定時區相對於 UTC 的偏移量 (分鐘) - 自動考慮日光節約時間  
+    function getOffsetMinutes(timeZone) {  
+        const date = new Date();  
+        const tzString = date.toLocaleString('en-US', { timeZone: timeZone });  
+        const localDate = new Date(tzString);  
+        const utcDate = new Date(date.toLocaleString('en-US', { timeZone: 'UTC' }));  
+        return Math.round((localDate - utcDate) / 60000);  
+    }  
+  
+    // 從 UTC 換算至所有場站  
+    function calculateFromUTC(utcVal) {  
+        if (utcVal.length !== 4) return;  
+        const utcMinutes = parseTime(utcVal);  
+        if (utcMinutes === null) return;  
+  
+        ['station1', 'station2', 'station3', 'station4'].forEach((id, idx) => {  
+            const tz = document.getElementById(id).value;  
+            const offset = getOffsetMinutes(tz);  
+            const localMinutes = utcMinutes + offset;  
+            document.getElementById(`time${idx+1}`).value = formatTime(localMinutes);  
+        });  
+    }  
+  
+    // 從某個場站的 Local Time 反推 UTC，再更新其他場站  
+    function calculateFromLocal(localVal, sourceId) {  
+        if (localVal.length !== 4) return;  
+        const localMinutes = parseTime(localVal);  
+        if (localMinutes === null) return;  
+  
+        const sourceTz = document.getElementById(sourceId).value;  
+        const sourceOffset = getOffsetMinutes(sourceTz);  
+          
+        // 反推 UTC  
+        const utcMinutes = localMinutes - sourceOffset;  
+        document.getElementById('utc-time').value = formatTime(utcMinutes);  
+  
+        // 更新其他欄位  
+        ['station1', 'station2', 'station3', 'station4'].forEach((id, idx) => {  
+            if (id !== sourceId) {  
+                const tz = document.getElementById(id).value;  
+                const offset = getOffsetMinutes(tz);  
+                document.getElementById(`time${idx+1}`).value = formatTime(utcMinutes + offset);  
+            }  
+        });  
+    }  
+  
+    // 當下拉選單變更時，觸發重新計算 (以目前 UTC 欄位為基準)  
+    function recalculateAll() {  
+        const utcVal = document.getElementById('utc-time').value;  
+        if (utcVal.length === 4) {  
+            calculateFromUTC(utcVal);  
+        }  
+    }  
+  
+    // 啟動  
+    window.onload = initDropdowns;  
+</script>  
+  
+</body>  
+</html>
